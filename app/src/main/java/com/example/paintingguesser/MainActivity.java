@@ -11,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.Html;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -45,22 +46,26 @@ public class MainActivity extends AppCompatActivity {
     Button next;
     ImageButton hint;
     EditText inputField;
-    TextView artistText;
+    TextView nameText;
 
     int index;
 
-    class PortraitsDownloader extends AsyncTask<String, Void, String> {
+    class PortraitsDownloader extends Thread {
 
         StringBuilder result = new StringBuilder();
-        URL url;
+        String[] urls;
         HttpURLConnection urlConnection = null;
 
+        PortraitsDownloader(String[] urls) {
+            this.urls = urls;
+        }
+
         @Override
-        protected String doInBackground(String... urls) {
+        public void run() {
 
             try {
 
-                url = new URL(urls[0]);
+                URL url = new URL(urls[0]);
                 urlConnection = (HttpURLConnection) url.openConnection();
 
                 InputStream inputStream = urlConnection.getInputStream();
@@ -74,49 +79,48 @@ public class MainActivity extends AppCompatActivity {
 
                 }
 
-                return result.toString();
-
             } catch (Exception e) {
                 Log.i("Result with error", result.toString());
                 e.printStackTrace();
             }
 
-
-            return "Done";
         }
 
-        @Override
-        protected void onPostExecute(String s) {
-            super.onPostExecute(s);
+        public StringBuilder getResult() {
+            return result;
         }
     }
 
-    class ImageDownloader extends AsyncTask<String, Void, Bitmap> {
+    class ImageDownloader extends Thread {
 
         Bitmap result;
-        URL url;
+        String[] urls;
         HttpURLConnection urlConnection = null;
 
+        ImageDownloader(String[] urls) {
+            this.urls = urls;
+        }
+
         @Override
-        protected Bitmap doInBackground(String... urls) {
+        public void run() {
 
             try {
 
-                url = new URL(urls[0]);
+                URL url = new URL(urls[0]);
                 urlConnection = (HttpURLConnection) url.openConnection();
                 urlConnection.connect();
                 InputStream inputStream = urlConnection.getInputStream();
                 result = BitmapFactory.decodeStream(inputStream);
 
-                return result;
 
             } catch (Exception e) {
 
                 e.printStackTrace();
             }
+        }
 
-
-            return null;
+        public Bitmap getResult() {
+            return result;
         }
     }
 
@@ -130,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
         next = (Button) findViewById(R.id.next);
         inputField = (EditText) findViewById(R.id.inputField);
         portrait = (ImageView) findViewById(R.id.portrait);
-        artistText = (TextView) findViewById(R.id.artistText);
+        nameText = (TextView) findViewById(R.id.nameText);
 
         index = 0;
 
@@ -160,15 +164,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void initiateApp() {
-        PortraitsDownloader task = new PortraitsDownloader();
+        String[] urls = {portraitUrl};
+        PortraitsDownloader task = new PortraitsDownloader(urls);
         String result = null;
 
         try {
-
-            result = task.execute(portraitUrl).get();
-            findViewById(R.id.loadingPanel).setVisibility(View.GONE);
-
-
+            task.start();
+            task.join();
+            result = String.valueOf(task.getResult());
         }
         catch (Exception e) {
             Log.i("Error", "Results found nothing");
@@ -178,7 +181,6 @@ public class MainActivity extends AppCompatActivity {
         getImageData(result);
 
         setPortrait();
-        //findViewById(R.id.loadingPanel).setVisibility(View.GONE);
     }
 
     public void increaseIndex() {
@@ -192,30 +194,30 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void setPortrait() {
-        ImageDownloader imgTask = new ImageDownloader();
+        String[] urls = {imgUrls.get(index)};
+        ImageDownloader imgTask = new ImageDownloader(urls);
 
         Bitmap image = null;
         try {
-            image = imgTask.execute(imgUrls.get(index)).get();
+            imgTask.start();
+            imgTask.join();
             Log.i("URL", imgUrls.get(index));
+
+            image = imgTask.getResult();
             portrait.setImageBitmap(image);
 
-            String name = names.get(index);
-            name = name.split("The famous painting")[0];
-            name = name.split("the famous painting")[0];
-            name = name.split("famous painting")[0];
-            artistText.setText(name);
+            String name = getName();
+            nameText.setText(name);
 
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-
     }
 
     public void getImageData(String res) {
 
         String[] splitRes = res.split("<div id=\"bsf_rt_marker\">");
+        Log.i("Res", splitRes[0] + " " + String.valueOf(splitRes.length));
 
         ArrayList<String> alts = new ArrayList<String>();
         ArrayList<String> srcs = new ArrayList<String>();
@@ -268,14 +270,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void hint() {
-        String name = names.get(index);
-        name = name.split("The famous painting")[0];
-        name = name.split("the famous painting")[0];
-        name = name.split("famous painting")[0];
+        String name = getName();
         String artist = artists.get(index);
         Toast.makeText(getApplicationContext(), name + " by " + artist, Toast.LENGTH_LONG).show();
     }
 
+    public String getName() {
+        String name = names.get(index);
+        name = name.split("The famous painting")[0];
+        name = name.split("the famous painting")[0];
+        name = name.split("famous painting")[0];
 
+        return name;
+    }
 
 }
